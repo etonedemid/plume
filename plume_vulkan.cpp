@@ -15,6 +15,12 @@
 #include <climits>
 #include <unordered_map>
 
+#if defined(__SWITCH__)
+extern "C" {
+#   include <switch/display/native_window.h>
+}
+#endif
+
 #if DLSS_ENABLED
 #   include "render/plume_dlss.h"
 #endif
@@ -52,6 +58,8 @@ namespace plume {
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 #   elif defined(__ANDROID__)
         VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+#   elif defined(__SWITCH__)
+        VK_NN_VI_SURFACE_EXTENSION_NAME,
 #   elif defined(__linux__)
 #   if !defined(PLUME_SDL_VULKAN_ENABLED)
         VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
@@ -2102,6 +2110,18 @@ namespace plume {
             fprintf(stderr, "SDL_Vulkan_CreateSurface failed with error %s.\n", SDL_GetError());
             return;
         }
+#   elif defined(__SWITCH__)
+        assert(desc.renderWindow != nullptr);
+        VkViSurfaceCreateInfoNN surfaceCreateInfo = {};
+        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_VI_SURFACE_CREATE_INFO_NN;
+        surfaceCreateInfo.window = desc.renderWindow;
+
+        VulkanInterface *renderInterface = commandQueue->device->renderInterface;
+        res = vkCreateViSurfaceNN(renderInterface->instance, &surfaceCreateInfo, nullptr, &surface);
+        if (res != VK_SUCCESS) {
+            fprintf(stderr, "vkCreateViSurfaceNN failed with error code 0x%X.\n", res);
+            return;
+        }
 #   elif defined(__ANDROID__)
         assert(desc.renderWindow != nullptr);
         VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = {};
@@ -2465,6 +2485,11 @@ namespace plume {
         dstHeight = rect.bottom - rect.top;
 #   elif defined(PLUME_SDL_VULKAN_ENABLED)
         SDL_GetWindowSizeInPixels(desc.renderWindow, (int *)(&dstWidth), (int *)(&dstHeight));
+#   elif defined(__SWITCH__)
+        u32 w = 0, h = 0;
+        nwindowGetDimensions(desc.renderWindow, &w, &h);
+        dstWidth = w;
+        dstHeight = h;
 #   elif defined(__ANDROID__)
         dstWidth = ANativeWindow_getWidth(desc.renderWindow);
         dstHeight = ANativeWindow_getHeight(desc.renderWindow);
@@ -4464,7 +4489,8 @@ namespace plume {
 #else
     VulkanInterface::VulkanInterface() {
 #endif
-        VkResult res = volkInitialize();
+        // The host may have loaded volk already (custom driver via volkInitializeCustom).
+        VkResult res = vkGetInstanceProcAddr != nullptr ? VK_SUCCESS : volkInitialize();
         if (res != VK_SUCCESS) {
             fprintf(stderr, "volkInitialize failed with error code 0x%X.\n", res);
             return;

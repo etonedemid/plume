@@ -33,12 +33,19 @@
 #include <SDL_vulkan.h>
 #endif
 
+#if defined(__SWITCH__)
+struct NWindow;
+#endif
+
 namespace plume {
 #if defined(_WIN32)
     // Native HWND handle to the target window.
     typedef HWND RenderWindow;
 #elif defined(__ANDROID__)
     typedef ANativeWindow* RenderWindow;
+#elif defined(__SWITCH__)
+    // libnx window (nwindowGetDefault()).
+    typedef ::NWindow *RenderWindow;
 #elif defined(PLUME_SDL_VULKAN_ENABLED)
     typedef SDL_Window *RenderWindow;
 #elif defined(__linux__)
